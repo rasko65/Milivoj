@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Milivojev bunar</title>
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-title" content="Milivojev bunar" />
+<meta name="theme-color" content="#0f172a" />
+
+<!-- Chart.js + date adapter (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.3.1/dist/chartjs-adapter-luxon.umd.min.js"></script>
+
+<style>
+  :root, body.dark {
+    --bg: #0f172a;
+    --bg-2: #1e293b;
+    --panel: #1e293b;
+    --panel-2: #273449;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --c1: #38bdf8; /* Milivojev bunar */
+    --accent: #6366f1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(1200px 600px at 20% -10%, var(--bg-2) 0%, var(--bg) 60%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+    transition: background .25s, color .25s;
+  }
+  header { max-width: 1100px; margin: 0 auto 20px; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 650; }
+  .sub { color: var(--muted); font-size: 13px; }
+
+  .controls {
+    max-width: 1100px; margin: 0 auto 18px;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    justify-content: space-between;
+  }
+  .seg { display: inline-flex; background: var(--panel); border-radius: 10px; padding: 4px; gap: 4px; }
+  .seg button {
+    border: 0; background: transparent; color: var(--muted);
+    padding: 8px 16px; border-radius: 7px; cursor: pointer;
+    font-size: 14px; font-weight: 600; transition: .15s;
+  }
+  .seg button:hover { color: var(--text); }
+  .seg button.active { background: var(--accent); color: #fff; }
+  .status { color: var(--muted); font-size: 13px; }
+  .btn-export {
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px;
+    font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-export:hover { border-color: var(--accent); }
+  .btn-export:disabled { opacity: .55; cursor: progress; }
+  .status.err { color: #ef4444; }
+
+  .banner { max-width: 1100px; margin: 0 auto 18px; padding: 12px 16px; border-radius: 12px;
+            background: #7f1d1d; color: #fee2e2; border: 1px solid #ef4444;
+            font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .banner .ico { font-size: 18px; }
+  .banner[hidden] { display: none; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; }
+  .card h2 { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .wico { display: inline-flex; align-items: center; justify-content: center;
+          width: 26px; height: 26px; flex: 0 0 auto; }
+  .wico svg { width: 100%; height: 100%; }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .stat { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .val { font-size: 20px; font-weight: 700; margin-top: 2px; }
+  .stat .when { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* minmax(0, 1fr) + min-width: 0 let the column shrink below the canvas's current
+     pixel width; otherwise the canvas (sized in landscape) holds the column wide and
+     Chart.js never shrinks it back after rotating to portrait. */
+  .charts { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px;
+            grid-template-columns: minmax(0, 1fr); }
+  .charts .card { min-width: 0; }
+  .chart-box { position: relative; height: 230px; min-width: 0; }
+  .card .chart-box { margin-top: 14px; }
+
+  /* Tabs (Pregled / Detaljno) */
+  .tabs { position: relative; max-width: 1100px; margin: 0 auto 18px; display: flex;
+          background: var(--panel); border-radius: 12px; padding: 5px; gap: 5px; }
+  .tab-indicator { position: absolute; top: 5px; left: 5px; height: 0; width: 0;
+                   background: var(--accent); border-radius: 9px; z-index: 0;
+                   transition: transform .32s cubic-bezier(.4, 0, .2, 1),
+                               width .32s cubic-bezier(.4, 0, .2, 1); }
+  .tabs button { position: relative; z-index: 1; flex: 1; border: 0; background: transparent;
+                 color: var(--muted); padding: 12px 16px; border-radius: 9px; cursor: pointer;
+                 font-size: 16px; font-weight: 650;
+                 transition: color .28s ease; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.active { color: #fff; }
+  @media (prefers-reduced-motion: reduce) {
+    .tab-indicator { transition: none; }
+  }
+  .hidden { display: none !important; }
+
+  /* Smooth tab transitions */
+  .view { transition: opacity .52s ease, transform .52s ease; will-change: opacity, transform; }
+  .view.view-enter { opacity: 0; transform: translateX(var(--enter-x, 24px)); }
+  @media (prefers-reduced-motion: reduce) {
+    .view { transition: none; }
+    .view.view-enter { opacity: 1; transform: none; }
+  }
+
+  /* Pregled (Basic) view — big current readings, fills the screen */
+  #view-basic { max-width: 1100px; margin: 0 auto; display: flex;
+                flex-direction: column; gap: 16px;
+                min-height: calc(100dvh - 140px); }
+  .big-card { flex: 1; background: var(--panel); border: 1px solid var(--border);
+              border-radius: 18px; padding: 24px; display: flex; flex-direction: column;
+              align-items: center; justify-content: center; text-align: center; gap: 12px; }
+  .big-name { font-size: 20px; font-weight: 650; color: var(--muted);
+              display: flex; align-items: center; gap: 10px; }
+  .big-name .wico { width: 30px; height: 30px; }
+  .big-main { display: flex; align-items: center; justify-content: center; gap: clamp(14px, 5vw, 32px); }
+  .big-ico { width: clamp(72px, 26vw, 140px); height: clamp(72px, 26vw, 140px); flex: 0 0 auto; }
+  .big-val { font-size: clamp(56px, 18vw, 92px); font-weight: 800; line-height: 1;
+             letter-spacing: -.02em; }
+  .big-unit { font-size: .42em; font-weight: 600; color: var(--muted); margin-left: 8px; }
+  .big-when { font-size: 14px; color: var(--muted); }
+  .big-card[data-focus] { cursor: pointer; transition: border-color .2s, transform .2s; }
+  .big-card[data-focus]:hover { border-color: var(--accent); }
+  .big-card[data-focus]:active { transform: scale(.985); }
+  .big-card[data-focus]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* Detaljno focused on a single well (opened from a Pregled card) */
+  .charts.focused .chart-box { height: min(420px, calc(100dvh - 330px)); min-height: 230px; }
+</style>
+</head>
+<body>
+
+<div class="banner" id="signal-banner" hidden>
+  <span class="ico">⚠️</span><span id="signal-text"></span>
+</div>
+
+<div class="tabs" id="tabs">
+  <span class="tab-indicator" id="tab-indicator"></span>
+  <button data-tab="basic" class="active">Pregled</button>
+  <button data-tab="advanced">Detaljno</button>
+</div>
+
+<!-- ===== Pregled (Basic): current readings, full screen ===== -->
+<section id="view-basic" class="view">
+  <div class="big-card" data-focus="1" role="button" tabindex="0" title="Detaljno — Milivojev bunar">
+    <div class="big-name">Milivojev bunar</div>
+    <div class="big-main">
+      <span class="wico big-ico" data-well="new" style="color:var(--c1)"></span>
+      <span class="big-val" id="b1-val" style="color:var(--c1)">–</span>
+    </div>
+    <div class="big-when" id="b1-t"></div>
+  </div>
+</section>
+
+<!-- ===== Detaljno (Advanced): full dashboard ===== -->
+<section id="view-advanced" class="view hidden">
+  <div class="controls">
+    <div class="seg" id="ranges">
+      <button data-range="1h">1č</button>
+      <button data-range="1d" class="active">1d</button>
+      <button data-range="7d">7d</button>
+      <button data-range="30d">30d</button>
+    </div>
+    <button class="btn-export" id="export-csv" title="Izvezi sve podatke u CSV">⤓ Izvoz u Excel</button>
+    <span class="status" id="status">Učitavanje…</span>
+  </div>
+
+  <div class="charts" id="charts">
+    <div class="card" id="card1">
+      <h2><span class="wico" data-well="new" style="color:var(--c1)"></span> Milivojev bunar</h2>
+      <div class="stats">
+        <div class="stat"><div class="label">Min</div><div class="val" id="s1-min">–</div><div class="when" id="s1-min-t"></div></div>
+        <div class="stat"><div class="label">Maks</div><div class="val" id="s1-max">–</div><div class="when" id="s1-max-t"></div></div>
+        <div class="stat"><div class="label">Trenutno</div><div class="val" id="s1-last">–</div><div class="when" id="s1-last-t"></div></div>
+      </div>
+      <div class="chart-box"><canvas id="chart1"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<script>
+// ---- ThingSpeak kanal (field1 = nivo m, field2 = napon V, field3 = RSSI dBm) ----
+const CHANNEL_ID = "3540749";
+const READ_API_KEY = "I5HP4DK2P78OC1XB";
+
+// range -> ThingSpeak query params (averaging keeps point counts sane)
+// NOTE: ThingSpeak applies `average` only over the last ~8000 RAW records of the
+// requested window. A device posting every 30 s produces ~8000 records in ~2.8 days,
+// so a `days=7` averaged query silently drops the oldest ~4 days — which shows up
+// as an empty gap on the left of the 7d chart (the 30d view escapes this because
+// daily averaging is served from a full-window path). `maxChunkMs` splits such a
+// window into sub-requests that each stay under the cap; results are merged below.
+const RANGES = {
+  "1h":  { minutes: 60,  average: null, gran: "1 min",  ms: 60*60*1000,        unit: "minute" },
+  "1d":  { days: 1,      average: 60,   gran: "1 sat",   ms: 24*60*60*1000,     unit: "hour"   },
+  "7d":  { days: 7,      average: 240,  gran: "4 sata",  ms: 7*24*60*60*1000,   unit: "day", maxChunkMs: 2.5*24*60*60*1000 },
+  "30d": { days: 30,     average: 1440, gran: "1 dan",   ms: 30*24*60*60*1000,  unit: "day"    },
+};
+
+const DT = luxon.DateTime;
+const LOCALE = "sr-Latn";
+const UNIT = "m"; // Y-axis unit (meters)
+const SIGNAL_TIMEOUT_MS = 90 * 1000; // no signal if last entry older than this
+let chart1;
+let currentRange = "1d";
+let refreshTimer;
+
+function tsParam(ms) {
+  return DT.fromMillis(ms, { zone: "utc" }).toFormat("yyyy-MM-dd HH:mm:ss");
+}
+
+function buildUrl(range, startMs, endMs) {
+  const cfg = RANGES[range];
+  const p = new URLSearchParams({ api_key: READ_API_KEY });
+  if (startMs != null && endMs != null) {
+    // Explicit window: lets ThingSpeak average over exactly this slice.
+    p.set("start", tsParam(startMs));
+    p.set("end", tsParam(endMs));
+  } else {
+    if (cfg.minutes) p.set("minutes", cfg.minutes);
+    if (cfg.days) p.set("days", cfg.days);
+  }
+  if (cfg.average) p.set("average", cfg.average);
+  p.set("timezone", "UTC"); // we convert to local on the client
+  return `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?${p.toString()}`;
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// Fetch a range's feeds, chunking long averaged windows so each sub-request stays
+// under ThingSpeak's ~8000 raw-record averaging cap (see RANGES note above).
+async function fetchFeeds(range) {
+  const cfg = RANGES[range];
+  if (cfg.average && cfg.maxChunkMs && cfg.ms > cfg.maxChunkMs) {
+    const endMs = DT.now().toMillis();
+    const startMs = endMs - cfg.ms;
+    const urls = [];
+    for (let s = startMs; s < endMs; s += cfg.maxChunkMs) {
+      urls.push(buildUrl(range, s, Math.min(s + cfg.maxChunkMs, endMs)));
+    }
+    const chunks = await Promise.all(urls.map(u => fetchJson(u).then(d => d.feeds || [])));
+    // Merge and de-duplicate by timestamp (chunk boundaries share a bucket).
+    const byTime = new Map();
+    for (const feeds of chunks) {
+      for (const f of feeds) byTime.set(f.created_at, f);
+    }
+    return [...byTime.values()].sort((a, b) =>
+      a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0);
+  }
+  const data = await fetchJson(buildUrl(range));
+  return data.feeds || [];
+}
+
+// Fetch RAW (non-averaged) feeds within the selected window, so min/max/current
+// stats show the EXACT measurement time and value. Averaged feeds bucket timestamps
+// to boundaries (e.g. 21:43 -> 22:00) and smooth values, which is fine for the chart
+// but wrong for stats. Paginates past ThingSpeak's 8000-row cap, bounded by the window.
+async function fetchRawFeeds(range) {
+  const startStr = tsParam(DT.now().toMillis() - RANGES[range].ms);
+  const PAGE = 8000;
+  const byTime = new Map();
+  let end = null;
+  for (let i = 0; i < 50; i++) {
+    const p = new URLSearchParams({ api_key: READ_API_KEY, results: PAGE, start: startStr, timezone: "UTC" });
+    if (end) p.set("end", end);
+    const data = await fetchJson(`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?${p.toString()}`);
+    const feeds = data.feeds || [];
+    if (!feeds.length) break;
+    for (const f of feeds) byTime.set(f.created_at, f);
+    if (feeds.length < PAGE) break;
+    const nextEnd = DT.fromISO(feeds[0].created_at, { zone: "utc" }).minus({ seconds: 1 }).toFormat("yyyy-MM-dd HH:mm:ss");
+    if (nextEnd === end) break;
+    end = nextEnd;
+  }
+  return [...byTime.values()].sort((a, b) =>
+    a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0);
+}
+
+function setStatus(msg, isErr=false) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.classList.toggle("err", isErr);
+}
+
+function fmt(v) {
+  return (v === null || v === undefined || Number.isNaN(v)) ? "–" : Number(v).toFixed(2);
+}
+
+function computeStats(points) {
+  const valid = points.filter(p => p.y !== null && !Number.isNaN(p.y));
+  if (!valid.length) return null;
+  let min = valid[0], max = valid[0];
+  for (const p of valid) {
+    if (p.y < min.y) min = p;
+    if (p.y > max.y) max = p;
+  }
+  return { min, max, last: valid[valid.length - 1] };
+}
+
+function whenStr(p) {
+  return p ? DT.fromMillis(p.x).toLocal().setLocale(LOCALE).toFormat("d. LLL, HH:mm") : "";
+}
+
+function updateCard(prefix, stats) {
+  const ids = ["min", "max", "last"];
+  if (!stats) {
+    ids.forEach(k => {
+      document.getElementById(`${prefix}-${k}`).textContent = "–";
+      document.getElementById(`${prefix}-${k}-t`).textContent = "";
+    });
+    return;
+  }
+  document.getElementById(`${prefix}-min`).textContent = fmt(stats.min.y);
+  document.getElementById(`${prefix}-max`).textContent = fmt(stats.max.y);
+  document.getElementById(`${prefix}-last`).textContent = fmt(stats.last.y);
+  document.getElementById(`${prefix}-min-t`).textContent = whenStr(stats.min);
+  document.getElementById(`${prefix}-max-t`).textContent = whenStr(stats.max);
+  document.getElementById(`${prefix}-last-t`).textContent = whenStr(stats.last);
+}
+
+function themeColors() {
+  return {
+    text: "#e2e8f0",
+    muted: "#94a3b8",
+    grid: "rgba(148,163,184,.1)",
+    tipBg: "#0f172a",
+    tipBorder: "#334155",
+  };
+}
+
+function makeChart(canvasId, label, color, bg, yMin, yMax) {
+  const c = themeColors();
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  return new Chart(ctx, {
+    type: "line",
+    data: {
+      datasets: [
+        { label, data: [], borderColor: color,
+          backgroundColor: bg, borderWidth: 2, pointRadius: 0,
+          tension: .25, fill: true, spanGaps: true },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: c.tipBg, borderColor: c.tipBorder, borderWidth: 1,
+          titleColor: c.text, bodyColor: c.text, padding: 10,
+          callbacks: {
+            title: (items) => DT.fromMillis(items[0].parsed.x).toLocal().setLocale(LOCALE).toFormat("d. LLL yyyy. HH:mm"),
+            label: (item) => `${item.dataset.label}: ${fmt(item.parsed.y)} ${UNIT}`
+          }
+        }
+      },
+      scales: {
+        x: { type: "time",
+             time: { tooltipFormat: "HH:mm",
+                     displayFormats: { minute: "d. LLL HH:mm", hour: "d. LLL HH:mm", day: "d. LLL", week: "d. LLL", month: "LLL yy" } },
+             adapters: { date: { locale: LOCALE } },
+             ticks: { color: c.muted, maxRotation: 50, minRotation: 50, autoSkip: true, autoSkipPadding: 12 },
+             grid: { color: c.grid } },
+        y: { min: yMin, max: yMax,
+             title: { display: true, text: `Nivo (${UNIT})`, color: c.muted },
+             ticks: { color: c.muted, callback: (v) => `${Number(v).toFixed(2)} ${UNIT}` },
+             grid: { color: c.grid } }
+      }
+    }
+  });
+}
+
+function makeCharts() {
+  chart1 = makeChart("chart1", "Milivojev bunar", "#38bdf8", "rgba(56,189,248,.12)", 0, 10);
+}
+
+async function load(range) {
+  setStatus("Učitavanje…");
+  try {
+    const feeds = await fetchFeeds(range);
+
+    const s1 = [];
+    for (const f of feeds) {
+      const t = DT.fromISO(f.created_at, { zone: "utc" }).toMillis();
+      const n1 = parseFloat(f.field1);
+      s1.push({ x: t, y: Number.isFinite(n1) ? n1 : null });
+    }
+
+    chart1.data.datasets[0].data = s1;
+
+    // Pin the x-axis to the full selected window (data may start later due to gaps)
+    const xMax = DT.now().toMillis();
+    const xMin = xMax - RANGES[range].ms;
+    chart1.options.scales.x.time.unit = RANGES[range].unit;
+    chart1.options.scales.x.min = xMin;
+    chart1.options.scales.x.max = xMax;
+    chart1.update();
+
+    // Stats use RAW measurements for exact times/values (1h fetch is already raw).
+    const rawFeeds = RANGES[range].average ? await fetchRawFeeds(range) : feeds;
+    const r1 = [];
+    for (const f of rawFeeds) {
+      const t = DT.fromISO(f.created_at, { zone: "utc" }).toMillis();
+      const n1 = parseFloat(f.field1);
+      r1.push({ x: t, y: Number.isFinite(n1) ? n1 : null });
+    }
+    updateCard("s1", computeStats(r1));
+
+    setStatus(`Ažurirano ${DT.now().toFormat("HH:mm:ss")}`);
+  } catch (e) {
+    setStatus(`Greška: ${e.message}`, true);
+  }
+}
+
+function selectRange(range) {
+  currentRange = range;
+  document.querySelectorAll("#ranges button").forEach(b =>
+    b.classList.toggle("active", b.dataset.range === range));
+  load(range);
+}
+
+// ---- Signal / connectivity check (uses the channel's true last entry) ----
+function ageStr(ms) {
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `pre ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `pre ${h} h`;
+  const d = Math.floor(h / 24);
+  return `pre ${d} ${d === 1 ? "dan" : "dana"}`;
+}
+
+function showBanner(text) {
+  document.getElementById("signal-text").textContent = text;
+  document.getElementById("signal-banner").hidden = false;
+}
+function hideBanner() {
+  document.getElementById("signal-banner").hidden = true;
+}
+
+async function checkSignal() {
+  try {
+    const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds/last.json?api_key=${READ_API_KEY}&timezone=UTC`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const txt = (await res.text()).trim();
+    if (!txt || txt === "-1") { showBanner("Nema signala sa ThingSpeak-a — nema zabeleženih podataka."); return; }
+    const last = JSON.parse(txt);
+    if (!last || !last.created_at) { showBanner("Nema signala sa ThingSpeak-a — nema zabeleženih podataka."); return; }
+    const ts = DT.fromISO(last.created_at, { zone: "utc" }).toMillis();
+    const age = Date.now() - ts;
+    if (age > SIGNAL_TIMEOUT_MS) {
+      const when = DT.fromMillis(ts).toLocal().setLocale(LOCALE).toFormat("d. LLL yyyy. HH:mm");
+      showBanner(`Nema signala sa ThingSpeak-a — poslednji zapis: ${when} (${ageStr(age)}).`);
+    } else {
+      hideBanner();
+    }
+  } catch (e) {
+    showBanner(`Nema veze sa ThingSpeak-om (${e.message}).`);
+  }
+}
+
+document.getElementById("ranges").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (btn) selectRange(btn.dataset.range);
+});
+
+// ---- Export ALL channel data to CSV (paginates past ThingSpeak's 8000-row cap) ----
+function csvCell(v) {
+  if (v === null || v === undefined) return "";
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+async function exportCsv() {
+  const btn = document.getElementById("export-csv");
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⤓ Preuzimanje…";
+  try {
+    const PAGE = 8000;
+    const byId = new Map();
+    let end = null;
+    for (let i = 0; i < 200; i++) {
+      const p = new URLSearchParams({ api_key: READ_API_KEY, results: PAGE, timezone: "UTC" });
+      if (end) p.set("end", end);
+      const data = await fetchJson(`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds.json?${p.toString()}`);
+      const feeds = data.feeds || [];
+      if (!feeds.length) break;
+      for (const f of feeds) byId.set(f.entry_id, f);
+      if (feeds.length < PAGE) break;
+      // Page backwards: next window ends just before the earliest record we just got.
+      const earliest = feeds[0].created_at;
+      const nextEnd = DT.fromISO(earliest, { zone: "utc" }).minus({ seconds: 1 }).toFormat("yyyy-MM-dd HH:mm:ss");
+      if (nextEnd === end) break;
+      end = nextEnd;
+    }
+    const all = [...byId.values()].sort((a, b) =>
+      a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0);
+    const header = ["created_at", "nivo_m", "napon_v", "rssi_dbm"];
+    const lines = [header.join(",")];
+    for (const f of all) {
+      lines.push([csvCell(f.created_at), csvCell(f.field1), csvCell(f.field2), csvCell(f.field3)].join(","));
+    }
+    const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `milivojev_bunar_${DT.now().toFormat("yyyyLLdd_HHmm")}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    btn.textContent = `⤓ ${all.length} redova`;
+    setTimeout(() => { btn.textContent = original; }, 2500);
+  } catch (e) {
+    btn.textContent = "⤓ Greška";
+    setTimeout(() => { btn.textContent = original; }, 2500);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("export-csv").addEventListener("click", exportCsv);
+
+// ---- Tabs (Pregled / Detaljno) ----
+let currentTab = "basic";
+let advancedInited = false;
+let focusWell = null; // null = full Detaljno view; 1 = enlarged chart
+
+async function loadBasic() {
+  try {
+    const url = `https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds/last.json?api_key=${READ_API_KEY}&timezone=UTC`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const txt = (await res.text()).trim();
+    const last = (txt && txt !== "-1") ? JSON.parse(txt) : null;
+    const setVal = (id, raw) => {
+      const v = parseFloat(raw);
+      document.getElementById(id).innerHTML =
+        `${fmt(Number.isFinite(v) ? v : null)}<span class="big-unit">${UNIT}</span>`;
+    };
+    setVal("b1-val", last && last.field1);
+    const when = last && last.created_at
+      ? whenStr({ x: DT.fromISO(last.created_at, { zone: "utc" }).toMillis() })
+      : "";
+    document.getElementById("b1-t").textContent = when;
+  } catch (e) {
+    document.getElementById("b1-t").textContent = `Greška: ${e.message}`;
+  }
+}
+
+function moveTabIndicator() {
+  const ind = document.getElementById("tab-indicator");
+  const active = document.querySelector("#tabs button.active");
+  if (!ind || !active) return;
+  ind.style.width = active.offsetWidth + "px";
+  ind.style.height = active.offsetHeight + "px";
+  ind.style.transform = `translateX(${active.offsetLeft - active.parentElement.clientLeft - 5}px)`;
+}
+
+// Enlarge the chart in Detaljno when opened from the Pregled card.
+function applyFocus(well) {
+  focusWell = well;
+  document.getElementById("charts").classList.toggle("focused", well !== null);
+}
+
+// `focus`: well to show alone in Detaljno; null (default) = full view.
+function switchTab(tab, dir = 0, focus = null) {
+  if (tab === "advanced" && tab === currentTab && focus !== focusWell) {
+    // Already on Detaljno: just change focus (e.g. tab click restores full view).
+    applyFocus(focus);
+    const view = document.getElementById("view-advanced");
+    view.style.setProperty("--enter-x", "0px");
+    view.classList.add("view-enter");
+    void view.offsetWidth;
+    requestAnimationFrame(() => view.classList.remove("view-enter"));
+    return;
+  }
+  if (tab === currentTab) return;
+  currentTab = tab;
+  if (tab === "advanced") applyFocus(focus);
+  document.querySelectorAll("#tabs button").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === tab));
+  moveTabIndicator();
+
+  const incoming = document.getElementById(tab === "basic" ? "view-basic" : "view-advanced");
+  const outgoing = document.getElementById(tab === "basic" ? "view-advanced" : "view-basic");
+
+  // Slide-in direction: forward (next tab) enters from right, back from left.
+  const enterX = dir < 0 ? "-24px" : "24px";
+  outgoing.classList.add("hidden");
+  incoming.classList.remove("hidden");
+  incoming.style.setProperty("--enter-x", enterX);
+  incoming.classList.add("view-enter");
+  // Force reflow so the start state is applied before transitioning in.
+  void incoming.offsetWidth;
+  requestAnimationFrame(() => incoming.classList.remove("view-enter"));
+
+  if (tab === "advanced") {
+    if (!advancedInited) { advancedInited = true; makeCharts(); selectRange(currentRange); }
+    else { load(currentRange); }
+  } else {
+    loadBasic();
+  }
+}
+
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const dir = TAB_ORDER.indexOf(btn.dataset.tab) - TAB_ORDER.indexOf(currentTab);
+  switchTab(btn.dataset.tab, dir);
+});
+
+// Clicking a well card in Pregled opens Detaljno for just that well.
+document.querySelectorAll("#view-basic .big-card[data-focus]").forEach(card => {
+  const open = () => switchTab("advanced", 1, Number(card.dataset.focus));
+  card.addEventListener("click", open);
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+  });
+});
+
+// ---- Swipe navigation between tabs (touch) ----
+const TAB_ORDER = ["basic", "advanced"];
+(function enableSwipeNav() {
+  let startX = 0, startY = 0, tracking = false;
+  const SWIPE_MIN = 60;      // min horizontal distance (px)
+  const SWIPE_MAX_OFF = 50;  // max vertical drift (px)
+
+  window.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    // Dragging along a chart reads values (tooltip) — never treat it as a tab swipe.
+    if (e.target.closest(".chart-box")) { tracking = false; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+
+  window.addEventListener("touchend", (e) => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if (Math.abs(dx) < SWIPE_MIN || Math.abs(dy) > SWIPE_MAX_OFF) return;
+    const idx = TAB_ORDER.indexOf(currentTab);
+    const step = dx < 0 ? 1 : -1; // swipe left -> next tab
+    const next = idx + step;
+    if (next >= 0 && next < TAB_ORDER.length) switchTab(TAB_ORDER[next], step);
+  }, { passive: true });
+})();
+
+function refreshActive() {
+  loadBasic();
+  if (advancedInited) load(currentRange);
+  checkSignal();
+}
+
+// ---- Well icons (rustic stone well vs. modern tap) ----
+const WELL_ICONS = {
+  // Stari Bunar — classic roofed wishing well
+  old: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 9.5 L12 3.5 L21 9.5"/>
+    <path d="M7 9.5 V13.5"/>
+    <path d="M17 9.5 V13.5"/>
+    <path d="M6 11 H18"/>
+    <path d="M12 11 V13"/>
+    <path d="M10.4 13 H13.6 L13.1 15.2 H10.9 Z"/>
+    <path d="M6.5 13.5 L5.5 20.5 H18.5 L17.5 13.5 Z"/>
+    <path d="M9 17.2 H15"/>
+  </svg>`,
+  // Novi Bunar — bunar sa stubom i kofom
+  new: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 21 V11"/>
+    <path d="M19 21 V11"/>
+    <path d="M4 11 H20 L18 7 H6 Z"/>
+    <path d="M12 11 V14"/>
+    <path d="M10.5 14 H13.5 V16.5 H10.5 Z"/>
+    <path d="M3.5 21 H20.5"/>
+  </svg>`
+};
+
+document.querySelectorAll(".wico").forEach(el => {
+  el.innerHTML = WELL_ICONS[el.dataset.well] || "";
+});
+
+document.body.classList.add("dark");
+moveTabIndicator();
+window.addEventListener("resize", moveTabIndicator);
+loadBasic();
+checkSignal();
+refreshTimer = setInterval(refreshActive, 30000);
+</script>
+</body>
+</html>
