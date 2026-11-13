@@ -35,7 +35,7 @@
 #endif
 
 // Verzija firmware-a. Povećaj pre svake OTA objave (tools/release.sh to proverava).
-#define FW_VERSION 2
+#define FW_VERSION 3
 
 // ThingSpeak
 const unsigned long CHANNEL_ID = 3540749;

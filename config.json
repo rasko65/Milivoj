@@ -2,6 +2,6 @@
   "interval_s": 30,
   "v_full": 3.0,
   "level_full_m": 10.0,
-  "fw_version": 2,
+  "fw_version": 3,
   "fw_url": "https://rasko65.github.io/Milivoj/firmware.bin"
 }
