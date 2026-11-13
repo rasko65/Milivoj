@@ -4,3 +4,4 @@ build/
 *.elf
 *.hex
 secrets.h
+!/firmware.bin
