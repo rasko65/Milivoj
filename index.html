@@ -214,7 +214,7 @@ const RANGES = {
 const DT = luxon.DateTime;
 const LOCALE = "sr-Latn";
 const UNIT = "m"; // Y-axis unit (meters)
-const SIGNAL_TIMEOUT_MS = 90 * 1000; // no signal if last entry older than this
+const SIGNAL_TIMEOUT_MS = 5 * 60 * 1000; // no signal if last entry older than this (device sends every 2 min)
 let chart1;
 let currentRange = "1d";
 let refreshTimer;
@@ -707,7 +707,7 @@ moveTabIndicator();
 window.addEventListener("resize", moveTabIndicator);
 loadBasic();
 checkSignal();
-refreshTimer = setInterval(refreshActive, 30000);
+refreshTimer = setInterval(refreshActive, 60000);
 </script>
 </body>
 </html>

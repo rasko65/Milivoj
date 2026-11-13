@@ -55,7 +55,7 @@ const int SAMPLES     = 16;  // broj očitavanja koja se usrednjavaju
 // Podrazumevane vrednosti (config.json ih može promeniti; pamte se u NVS)
 float    vFull          = 3.0f;   // napon pri 20 mA
 float    levelFullM     = 10.0f;  // nivo pri 20 mA
-uint32_t sendIntervalMs = 30UL * 1000UL;
+uint32_t sendIntervalMs = 120UL * 1000UL;
 
 // Watchdog i oporavak
 #define WDT_TIMEOUT_S 60
