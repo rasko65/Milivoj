@@ -8,4 +8,5 @@
 #define WIFI_PASSWORD2 ""
 // #define WIFI_SSID3     ""                 // treća mreža (opciono), otkomentariši da se koristi
 // #define WIFI_PASSWORD3 ""
+#define AP_PASSWORD    ""                    // lozinka za "Milivoj-Setup" portal (min. 8 znakova)
 #define TS_WRITE_KEY   "YOUR_WRITE_API_KEY"  // ThingSpeak > kanal > API Keys > Write API Key
