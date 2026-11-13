@@ -68,6 +68,9 @@ void setup() {
   if (strlen(WIFI_SSID2) > 0) {
     wifiMulti.addAP(WIFI_SSID2, WIFI_PASSWORD2);
   }
+#ifdef WIFI_SSID3
+  wifiMulti.addAP(WIFI_SSID3, WIFI_PASSWORD3);
+#endif
   connectWiFi();
 
   ThingSpeak.begin(client);
